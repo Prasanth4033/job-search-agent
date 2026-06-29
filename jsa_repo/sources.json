@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "description": "Job search source organisations for the Daily DE Job Search Agent.",
+    "instructions": "To ADD a source: append a new object to the 'sources' array. To DISABLE a source: set 'enabled' to false. To DELETE a source: remove its object entirely. Run scripts/push_update.sh after any change to commit and push to GitHub.",
+    "last_updated": "2026-06-29",
+    "version": "1.0.0"
+  },
+  "sources": [
+    {
+      "id": "randstad",
+      "name": "Randstad USA",
+      "enabled": true,
+      "headquarters": "United States",
+      "us_coverage": "high",
+      "note": "Primary US staffing agency — strong coverage across all DE skills.",
+      "website": "https://www.randstadusa.com",
+      "search_url_template": "https://www.randstadusa.com/jobs/q-{query}/l-united-states/",
+      "google_site_operator": "site:randstadusa.com",
+      "api_endpoint": null,
+      "scraper_class": "RandstadScraper",
+      "badge_color": "#1565c0",
+      "card_bg_color": "#e9f5fb"
+    },
+    {
+      "id": "manpower",
+      "name": "ManpowerGroup",
+      "enabled": true,
+      "headquarters": "United States",
+      "us_coverage": "high",
+      "note": "Major US staffing agency with a JSON search API endpoint.",
+      "website": "https://www.manpower.com",
+      "search_url_template": "https://www.manpower.com/ManpowerUSA/JobSearch/?keyword={query}&location=United+States",
+      "google_site_operator": "site:manpower.com OR site:experis.com",
+      "api_endpoint": "https://www.manpower.com/ManpowerUSA/api/jobs/search",
+      "scraper_class": "ManpowerScraper",
+      "badge_color": "#e65100",
+      "card_bg_color": "#fdf3e7"
+    },
+    {
+      "id": "kelly",
+      "name": "Kelly Services",
+      "enabled": true,
+      "headquarters": "United States",
+      "us_coverage": "high",
+      "note": "US-based staffing using Phenom People ATS. Falls back to HTML if API returns empty.",
+      "website": "https://jobs.kellyservices.com",
+      "search_url_template": "https://jobs.kellyservices.com/us/en/search-results?keywords={query}&country=us",
+      "google_site_operator": "site:jobs.kellyservices.com",
+      "api_endpoint": "https://jobs.kellyservices.com/api/jobs",
+      "scraper_class": "KellyScraper",
+      "badge_color": "#2e7d32",
+      "card_bg_color": "#f0faf0"
+    },
+    {
+      "id": "teamlease",
+      "name": "TeamLease Digital",
+      "enabled": true,
+      "headquarters": "India",
+      "us_coverage": "low",
+      "note": "India-headquartered staffing firm. Some US client placements exist but volume is limited. Strict US location filter applied.",
+      "website": "https://www.teamleasedigital.com",
+      "search_url_template": "https://www.teamleasedigital.com/job-seeker/job-listing?skill={query}&location=USA",
+      "google_site_operator": "site:teamleasedigital.com",
+      "api_endpoint": null,
+      "scraper_class": "TeamLeaseScraper",
+      "badge_color": "#6a1b9a",
+      "card_bg_color": "#fdf0fb"
+    },
+    {
+      "id": "abc_consultants",
+      "name": "ABC Consultants",
+      "enabled": true,
+      "headquarters": "India",
+      "us_coverage": "very_low",
+      "note": "India-headquartered executive search firm. US job volume is very limited. Included to capture any US client placements. Strict US location filter applied.",
+      "website": "https://www.abcconsultants.com",
+      "search_url_template": "https://www.abcconsultants.com/jobs?q={query}&location=United+States&country=US",
+      "google_site_operator": "site:abcconsultants.com",
+      "api_endpoint": null,
+      "scraper_class": "ABCConsultantsScraper",
+      "badge_color": "#f57f17",
+      "card_bg_color": "#fff8e7"
+    }
+  ]
+}
