@@ -1,0 +1,36 @@
+# Environment & credentials — NEVER commit these
+.env
+credentials.json
+token.json
+
+# Generated outputs
+resumes/
+drafts/
+reports/
+*.docx
+*.eml
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

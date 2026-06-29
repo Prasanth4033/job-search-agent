@@ -37,7 +37,14 @@ class JobPosting:
     skills: List[str] = field(default_factory=list)
     description_snippet: str = ""
     salary: str = "Not specified"
-    job_type: str = "Not specified"   # Full-time / Contract / C2C etc.
+    job_type: str = "Not specified"       # Full-time / Contract / C2C etc.
+    # v2 additions
+    spoc_name: str = ""                   # Recruiter name if visible
+    spoc_email: str = ""                  # Recruiter email if visible
+    spoc_phone: str = ""                  # Recruiter phone if visible
+    matched_skills: List[str] = field(default_factory=list)   # Sai's skills that match JD
+    full_description: str = ""            # Full job description text
+    resume_path: str = ""                 # Path to generated tailored resume
 
     def is_recent(self, hours: int = 24) -> bool:
         """Return True if posted within the last *hours* hours."""
@@ -58,6 +65,10 @@ class JobPosting:
             "description_snippet": self.description_snippet,
             "salary": self.salary,
             "job_type": self.job_type,
+            "spoc_name": self.spoc_name,
+            "spoc_email": self.spoc_email,
+            "spoc_phone": self.spoc_phone,
+            "matched_skills": self.matched_skills,
         }
 
 
