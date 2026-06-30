@@ -44,11 +44,36 @@ class DiceScraper(BaseScraper):
             pass
         return None
 
+    @staticmethod
+    def _extract_from_dehydrated(props: dict) -> list:
+        """
+        Dice uses React Query — job results live inside dehydratedState.queries[].state.data.
+        Walk all queries and collect anything that looks like a job list.
+        """
+        jobs: list = []
+        dh = props.get("dehydratedState", {})
+        for query_entry in dh.get("queries", []):
+            data = query_entry.get("state", {}).get("data", {})
+            # data may be the jobs array directly or nested
+            if isinstance(data, list):
+                jobs.extend(data)
+            elif isinstance(data, dict):
+                for val in data.values():
+                    if isinstance(val, list) and val and isinstance(val[0], dict) and ("title" in val[0] or "jobTitle" in val[0]):
+                        jobs.extend(val)
+                    elif isinstance(val, dict):
+                        for inner_val in val.values():
+                            if isinstance(inner_val, list) and inner_val and isinstance(inner_val[0], dict):
+                                if "title" in inner_val[0] or "jobTitle" in inner_val[0]:
+                                    jobs.extend(inner_val)
+        return jobs
+
     def _parse_next_data(self, html: str, query: str) -> List[JobPosting]:
         """Extract jobs from Next.js __NEXT_DATA__ JSON embedded in page."""
         soup = BeautifulSoup(html, "html.parser")
         script = soup.find("script", id="__NEXT_DATA__")
         if not script or not script.string:
+            logger.debug(f"[{self.SOURCE_NAME}] No __NEXT_DATA__ script tag found.")
             return []
 
         try:
@@ -56,15 +81,23 @@ class DiceScraper(BaseScraper):
         except (json.JSONDecodeError, TypeError):
             return []
 
-        # Navigate to jobs list — path varies by Dice version
+        # Navigate to jobs list — Dice uses multiple structures across versions
         props = nd.get("props", {}).get("pageProps", {})
         jobs = (
+            # Legacy / older Dice Next.js versions
             props.get("initialState", {}).get("jobs", {}).get("jobs", [])
+            # Direct pageProps.jobs
             or props.get("jobs", [])
+            # Search results wrapper
             or props.get("searchResults", {}).get("jobs", [])
+            or props.get("searchResults", {}).get("results", [])
+            # data.jobs
             or props.get("data", {}).get("jobs", [])
+            # React Query dehydrated state (current Dice)
+            or self._extract_from_dehydrated(props)
             or []
         )
+        logger.debug(f"[{self.SOURCE_NAME}] __NEXT_DATA__ jobs found: {len(jobs)} for {query!r}")
 
         postings: List[JobPosting] = []
         for job in jobs:

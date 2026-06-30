@@ -54,35 +54,40 @@ def _parse_jobspy_date(val) -> Optional[datetime]:
 # Individual source wrappers
 # ──────────────────────────────────────────────
 
+def _call_scrape_jobs(site: str, query: str, hours_old: int = 24):
+    """
+    Call scrape_jobs with progressive fallback for different jobspy versions.
+    Tries richest param set first, strips unsupported kwargs on TypeError.
+    """
+    base_kwargs = dict(
+        site_name=[site],
+        search_term=query,
+        location="United States",
+        results_wanted=50,
+        country_indeed="USA",
+    )
+    # Ordered list of optional kwargs to try adding (newest → oldest)
+    optional_sets = [
+        {"hours_old": hours_old, "verbose": 0},
+        {"hours_old": hours_old},
+        {},
+    ]
+    for extras in optional_sets:
+        try:
+            return scrape_jobs(**base_kwargs, **extras)
+        except TypeError:
+            continue
+        except Exception as e:
+            raise e
+    return scrape_jobs(**base_kwargs)
+
+
 def _scrape_source(site: str, query: str, hours_old: int = 24) -> List[JobPosting]:
     """Call jobspy for one site + one query string."""
     if not JOBSPY_AVAILABLE:
         return []
-    # Try with hours_old first (newer jobspy); fall back without it for older installs
     try:
-        df = scrape_jobs(
-            site_name=[site],
-            search_term=query,
-            location="United States",
-            results_wanted=50,
-            hours_old=hours_old,
-            country_indeed="USA",
-            verbose=0,
-        )
-    except TypeError:
-        # Older jobspy version — hours_old not supported, filter by date manually later
-        try:
-            df = scrape_jobs(
-                site_name=[site],
-                search_term=query,
-                location="United States",
-                results_wanted=50,
-                country_indeed="USA",
-                verbose=0,
-            )
-        except Exception as e:
-            logger.warning(f"[jobspy:{site}] Error scraping {query!r}: {e}")
-            return []
+        df = _call_scrape_jobs(site, query, hours_old)
     except Exception as e:
         logger.warning(f"[jobspy:{site}] Error scraping {query!r}: {e}")
         return []
