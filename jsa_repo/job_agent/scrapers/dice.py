@@ -1,14 +1,19 @@
 """
-Dice.com scraper — v2.
-Uses the Dice public job search API (same endpoint the website calls).
-Dice is tech-focused and has strong DE/SQL/AWS coverage.
+Dice.com scraper — v2.1
+The private JSON API (dhigroupinc.com) returns 403 for unauthenticated requests.
+This version scrapes Dice's public HTML search results page instead.
+Dice embeds job data as JSON inside a <script id="__NEXT_DATA__"> tag.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime, timedelta
 from typing import List, Optional
+from urllib.parse import urljoin, quote_plus
+
+from bs4 import BeautifulSoup
 
 from .base import BaseScraper, JobPosting
 from ..utils.logger import logger
@@ -18,7 +23,7 @@ class DiceScraper(BaseScraper):
 
     SOURCE_NAME = "Dice"
     BASE_URL    = "https://www.dice.com"
-    API_URL     = "https://job-search-api.svc.dhigroupinc.com/v1/dice/jobs/search"
+    SEARCH_URL  = "https://www.dice.com/jobs"
 
     @staticmethod
     def _parse_date(raw: str) -> Optional[datetime]:
@@ -33,86 +38,119 @@ class DiceScraper(BaseScraper):
         m = re.search(r"(\d+)\s+day", raw)
         if m:
             return datetime.utcnow() - timedelta(days=int(m.group(1)))
-        # ISO 8601
         try:
             return datetime.fromisoformat(raw[:19].replace("z", ""))
         except ValueError:
             pass
         return None
 
-    def _api_params(self, query: str) -> dict:
-        return {
-            "q":               query,
-            "countryCode2":    "US",
-            "radius":          30,
-            "radiusUnit":      "mi",
-            "page":            1,
-            "pageSize":        50,
-            "facets":          "employmentType|postedDate|workplaceTypes|employerType",
-            "filters.postedDate": "ONE",       # posted in last 24 h
-            "filters.workplaceTypes": "Remote|Hybrid|On-site",
-            "sort":            "-score",
-            "fields":          "id,guid,title,company,employmentType,workplaceTypes,postedDate,modifiedDate,location,salary,skills,summary,applyDataList,recruiterEmail,recruiterName,recruiterPhone",
-            "culture":         "en",
-        }
+    def _parse_next_data(self, html: str, query: str) -> List[JobPosting]:
+        """Extract jobs from Next.js __NEXT_DATA__ JSON embedded in page."""
+        soup = BeautifulSoup(html, "html.parser")
+        script = soup.find("script", id="__NEXT_DATA__")
+        if not script or not script.string:
+            return []
 
-    def scrape(self, query: str) -> List[JobPosting]:
-        resp = self._get(
-            self.API_URL,
-            params=self._api_params(query),
-            headers={"Accept": "application/json"},
-        )
-        if resp is None:
-            return []
         try:
-            data = resp.json()
-        except ValueError:
+            nd = json.loads(script.string)
+        except (json.JSONDecodeError, TypeError):
             return []
+
+        # Navigate to jobs list — path varies by Dice version
+        props = nd.get("props", {}).get("pageProps", {})
+        jobs = (
+            props.get("initialState", {}).get("jobs", {}).get("jobs", [])
+            or props.get("jobs", [])
+            or props.get("searchResults", {}).get("jobs", [])
+            or props.get("data", {}).get("jobs", [])
+            or []
+        )
 
         postings: List[JobPosting] = []
-        for job in data.get("data", []):
-            title    = job.get("title", "Unknown")
-            company  = job.get("company", {})
-            company  = company.get("name", "Company Confidential") if isinstance(company, dict) else str(company)
-            location = job.get("location", "United States")
+        for job in jobs:
+            title      = job.get("title") or job.get("jobTitle", "Unknown")
+            company    = job.get("advertiser", {}).get("name", "") or job.get("company", "Company Confidential")
+            if isinstance(company, dict):
+                company = company.get("name", "Company Confidential")
+            location   = job.get("location", "United States")
             if isinstance(location, dict):
-                location = f"{location.get('displayName', 'United States')}"
-            date_raw = job.get("postedDate") or job.get("modifiedDate", "")
-            job_id   = job.get("id") or job.get("guid", "")
-            url      = f"https://www.dice.com/job-detail/{job_id}" if job_id else self.BASE_URL
-            snippet  = job.get("summary", "")[:400]
-            salary   = job.get("salary", "Not specified") or "Not specified"
-            job_type = job.get("employmentType", "Not specified")
-            skills   = job.get("skills", []) or [query]
-
-            # SPOC
-            spoc_name  = job.get("recruiterName", "")
-            spoc_email = job.get("recruiterEmail", "")
-            spoc_phone = job.get("recruiterPhone", "")
-
-            # Apply URL — Dice may have direct apply links
-            apply_list = job.get("applyDataList", [])
-            if apply_list and isinstance(apply_list, list):
-                apply_url = apply_list[0].get("applyUrl", url) or url
-            else:
-                apply_url = url
+                location = location.get("displayName", "United States")
+            date_raw   = job.get("postedDate") or job.get("date", "")
+            job_id     = job.get("id") or job.get("jobId", "")
+            url        = job.get("applyUrl") or (f"{self.BASE_URL}/job-detail/{job_id}" if job_id else self.BASE_URL)
+            snippet    = job.get("summary") or job.get("jobDescription", "")
+            snippet    = snippet[:400] if snippet else ""
+            salary     = str(job.get("salary") or job.get("pay", "Not specified"))
+            job_type   = str(job.get("employmentType") or job.get("jobType", "Not specified"))
+            skills     = job.get("skills") or [query]
+            if not isinstance(skills, list):
+                skills = [query]
 
             postings.append(JobPosting(
                 title=title,
-                company=company,
-                location=location,
+                company=str(company),
+                location=str(location),
                 posted_date=self._parse_date(str(date_raw)),
-                apply_url=apply_url,
+                apply_url=url,
                 source=self.SOURCE_NAME,
-                skills=skills if isinstance(skills, list) else [query],
+                skills=skills,
                 description_snippet=snippet,
-                salary=str(salary),
-                job_type=str(job_type),
-                spoc_name=spoc_name,
-                spoc_email=spoc_email,
-                spoc_phone=spoc_phone,
-                full_description=job.get("description", snippet),
+                salary=salary,
+                job_type=job_type,
+                full_description=job.get("jobDescription", snippet),
             ))
+
+        return postings
+
+    def _parse_html_cards(self, html: str, query: str, base_url: str) -> List[JobPosting]:
+        """Fallback: parse visible job cards from HTML."""
+        soup = BeautifulSoup(html, "html.parser")
+        cards = (
+            soup.select("dhi-search-card, [data-cy='card-title-link']")
+            or soup.select(".card, .job-card, [class*='jobCard'], article")
+        )
+        postings: List[JobPosting] = []
+        for card in cards:
+            try:
+                title_el = card.find(["h2", "h3", "a"], attrs={"data-cy": "card-title-link"}) or card.find(["h2", "h3"])
+                title    = title_el.get_text(strip=True) if title_el else "Unknown"
+                link_el  = card.find("a", href=True)
+                href     = link_el["href"] if link_el else ""
+                url      = urljoin(self.BASE_URL, href) if href else base_url
+                loc_el   = card.find(attrs={"data-cy": "search-result-location"}) or card.find(class_=re.compile(r"location", re.I))
+                location = loc_el.get_text(strip=True) if loc_el else "United States"
+                date_el  = card.find(attrs={"data-cy": "card-posted-date"}) or card.find(class_=re.compile(r"date|posted", re.I))
+                posted   = self._parse_date(date_el.get_text(strip=True) if date_el else "")
+                comp_el  = card.find(attrs={"data-cy": "search-result-company-name"}) or card.find(class_=re.compile(r"company", re.I))
+                company  = comp_el.get_text(strip=True) if comp_el else "Company Confidential"
+                postings.append(JobPosting(
+                    title=title,
+                    company=company,
+                    location=location,
+                    posted_date=posted,
+                    apply_url=url,
+                    source=self.SOURCE_NAME,
+                    skills=[query],
+                ))
+            except Exception as e:
+                logger.debug(f"[{self.SOURCE_NAME}] Card parse error: {e}")
+        return postings
+
+    def scrape(self, query: str) -> List[JobPosting]:
+        q    = quote_plus(query)
+        url  = f"{self.SEARCH_URL}?q={q}&countryCode=US&radius=30&radiusUnit=mi&page=1&pageSize=50&filters.postedDate=ONE&language=en"
+        resp = self._get(url, headers={
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+        })
+        if resp is None:
+            return []
+
+        # Try Next.js embedded data first
+        postings = self._parse_next_data(resp.text, query)
+        if not postings:
+            logger.debug(f"[{self.SOURCE_NAME}] No __NEXT_DATA__ jobs — trying HTML cards.")
+            postings = self._parse_html_cards(resp.text, query, url)
 
         logger.info(f"[{self.SOURCE_NAME}] {len(postings)} postings for {query!r}")
         return postings

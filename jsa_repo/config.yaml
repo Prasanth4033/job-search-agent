@@ -1,0 +1,95 @@
+# ─────────────────────────────────────────────
+# Job Search Agent v2 — Configuration
+# Copy this file to config.yaml and fill in your values.
+# Sensitive values (passwords, tokens) should be set in .env instead.
+# ─────────────────────────────────────────────
+
+# Schedule (used in --daemon mode)
+schedule:
+  run_time: "07:00"   # 24-hour UTC time
+
+# Email delivery (summary report)
+email:
+  smtp_host: "smtp.gmail.com"
+  smtp_port: 587
+  # Override via .env: EMAIL_SENDER, EMAIL_PASSWORD, EMAIL_RECIPIENT
+  sender: "your-email@gmail.com"
+  password: ""          # Use Gmail App Password — see docs/CONFIGURATION.md
+  recipient: "gspr4033@gmail.com"
+
+# Gmail API (for per-job draft creation with resume attachment)
+# One-time OAuth setup: run the agent once, browser will open for authorization.
+gmail_api:
+  # Download credentials.json from Google Cloud Console (OAuth2 Desktop app)
+  credentials_file: "credentials.json"
+  # Auto-generated after first auth — do not commit to git
+  token_file: "token.json"
+
+# Scraper settings
+scrapers:
+  request_timeout_sec: 15
+  retry_attempts: 3
+  parallel_workers: 4   # Number of parallel scraper threads
+
+# Filter settings
+filters:
+  hours_window: 24      # Only include jobs posted within this many hours
+  us_only: true         # Strict US-only location filter
+
+# Skills to search across all sources — v2 expanded
+skills:
+  # Cloud / platform
+  - "AWS Data Engineer"
+  - "GCP Data Engineer"
+  - "Databricks Data Engineer"
+  - "Snowflake Data Engineer"
+  # Core title variants
+  - "Senior Data Engineer"
+  - "Data Engineer"
+  # Specific skill sets
+  - "SQL Developer"
+  - "PL/SQL Developer"
+  - "PySpark Developer"
+  - "Spark Engineer"
+  # Big Data
+  - "Hadoop Data Engineer"
+  - "Big Data Engineer"
+  - "ETL Developer Hadoop"
+  - "Hive Developer"
+
+# Sources — v2 (11 sources)
+# Set enabled: false to skip a source
+sources:
+  # ── Top-tier job portals ──
+  dice:
+    enabled: true
+    note: "Tech-focused US portal — recommended primary source"
+  linkedin:
+    enabled: true
+    note: "Largest professional network — scraped via python-jobspy"
+  indeed:
+    enabled: true
+    note: "Largest general job board — scraped via python-jobspy"
+  ziprecruiter:
+    enabled: true
+    note: "High-volume US job board — scraped via python-jobspy"
+  glassdoor:
+    enabled: true
+    note: "Salary-transparent board — scraped via python-jobspy"
+  cybercoders:
+    enabled: true
+    note: "Tech-focused US staffing firm"
+  # ── Staffing agencies ──
+  randstad:
+    enabled: true
+    note: "V2: uses internal JSON API instead of HTML scraping"
+  manpower:
+    enabled: true
+  kelly:
+    enabled: true
+  teamlease:
+    enabled: true
+    note: "India-based staffing; US coverage limited"
+  abc_consultants:
+    enabled: true
+    note: "India-based staffing; US coverage very limited"

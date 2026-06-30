@@ -58,6 +58,7 @@ def _scrape_source(site: str, query: str, hours_old: int = 24) -> List[JobPostin
     """Call jobspy for one site + one query string."""
     if not JOBSPY_AVAILABLE:
         return []
+    # Try with hours_old first (newer jobspy); fall back without it for older installs
     try:
         df = scrape_jobs(
             site_name=[site],
@@ -66,7 +67,22 @@ def _scrape_source(site: str, query: str, hours_old: int = 24) -> List[JobPostin
             results_wanted=50,
             hours_old=hours_old,
             country_indeed="USA",
+            verbose=0,
         )
+    except TypeError:
+        # Older jobspy version — hours_old not supported, filter by date manually later
+        try:
+            df = scrape_jobs(
+                site_name=[site],
+                search_term=query,
+                location="United States",
+                results_wanted=50,
+                country_indeed="USA",
+                verbose=0,
+            )
+        except Exception as e:
+            logger.warning(f"[jobspy:{site}] Error scraping {query!r}: {e}")
+            return []
     except Exception as e:
         logger.warning(f"[jobspy:{site}] Error scraping {query!r}: {e}")
         return []
